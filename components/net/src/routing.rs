@@ -28,7 +28,7 @@ use zmq;
 
 use config::{RouterAddr, ToAddrString};
 use error::{Error, Result};
-use server::ZMQ_CONTEXT;
+use socket::DEFAULT_CONTEXT;
 
 pub type RouteResult<T> = result::Result<T, NetError>;
 
@@ -53,7 +53,7 @@ impl BrokerConn {
     /// * Socket could not be created
     /// * Socket could not be configured
     pub fn new() -> Result<Self> {
-        let socket = (**ZMQ_CONTEXT).as_mut().socket(zmq::REQ)?;
+        let socket = (**DEFAULT_CONTEXT).as_mut().socket(zmq::REQ)?;
         socket.set_rcvtimeo(RECV_TIMEOUT_MS)?;
         socket.set_sndtimeo(SEND_TIMEOUT_MS)?;
         socket.set_immediate(true)?;
@@ -80,7 +80,11 @@ impl BrokerConn {
     /// # Panics
     ///
     /// * Could not serialize message
-    pub fn route<M: Routable, R: protobuf::MessageStatic>(&mut self, msg: &M) -> RouteResult<R> {
+    pub fn route<M, R>(&mut self, msg: &M) -> RouteResult<R>
+    where
+        M: Routable,
+        R: protobuf::MessageStatic,
+    {
         if self.route_async(msg).is_err() {
             return Err(protocol::net::err(ErrCode::ZMQ, "net:route:1"));
         }
@@ -122,7 +126,10 @@ impl BrokerConn {
     /// # Panics
     ///
     /// * Could not serialize message
-    pub fn route_async<M: Routable>(&mut self, msg: &M) -> Result<()> {
+    pub fn route_async<M>(&mut self, msg: &M) -> Result<()>
+    where
+        M: Routable,
+    {
         let route_hash = msg.route_key().map(
             |key| key.hash(&mut FnvHasher::default()),
         );
@@ -166,8 +173,8 @@ impl Broker {
     ///
     /// * Could not read `zmq::Context` due to deadlock or poisoning
     fn new(net_ident: String) -> Result<Self> {
-        let fe = (**ZMQ_CONTEXT).as_mut().socket(zmq::ROUTER)?;
-        let be = (**ZMQ_CONTEXT).as_mut().socket(zmq::DEALER)?;
+        let fe = (**DEFAULT_CONTEXT).as_mut().socket(zmq::ROUTER)?;
+        let be = (**DEFAULT_CONTEXT).as_mut().socket(zmq::DEALER)?;
         fe.set_identity(net_ident.as_bytes())?;
         be.set_rcvtimeo(RECV_TIMEOUT_MS)?;
         be.set_sndtimeo(SEND_TIMEOUT_MS)?;
